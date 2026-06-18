@@ -259,7 +259,7 @@ def update_rects(slide, separadores):
             spPr.append(new_fill)
 
 
-def update_career_list(slide, carrera, tipo_carrera):
+def update_career_list(slide, carrera, tipo_carrera, area=''):
     """Move the arrow + highlight rect to the row matching the current carrera."""
     # Geometry constants (EMU) — from PPTmuestra.pptx analysis
     GROUP_LOCAL_OFFSET = 112549  # absolute_y + this = local_y in group XML
@@ -289,6 +289,8 @@ def update_career_list(slide, carrera, tipo_carrera):
         # Update row 3 text and point there
         shape = find_shape(slide, 'Tabla 8')
         if shape and shape.has_table:
+            if area:
+                set_cell(shape.table.rows[2].cells[0], area)
             set_cell(shape.table.rows[3].cells[0], carrera)
         center_y = ROW3_TOP + ROW3_H // 2
 
@@ -369,7 +371,8 @@ def generate_ppt(template_bytes, datos, metadata):
         update_rects(slide, separadores)
 
         tipo_carrera = rows[0].get('tipo_carrera', '')
-        update_career_list(slide, carrera, tipo_carrera)
+        area = rows[0].get('area', '')
+        update_career_list(slide, carrera, tipo_carrera, area)
 
         update_stats(slide, meta.get('muestra'), meta.get('desertores'), meta.get('alumnos'))
         update_var_table(slide, meta.get('var_des_prom'), meta.get('var_periodo_ant'))
