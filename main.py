@@ -37,7 +37,7 @@ FILL_ESPECIFICO  = f'<a:solidFill xmlns:a="{A_NS}"><a:schemeClr val="tx1"><a:lum
 SIDEBAR_LIST_ROW  = 4            # last row of Tabla 8 holds the active section's career list
 SIDEBAR_MENU_ROWS = 4            # rows 0..3 are the section cards
 SIDEBAR_PARA_H    = 265045       # EMU per career line in the list row (font metric)
-ACTIVE_COLOR      = RGBColor(0x00, 0xB4, 0x91)  # teal highlight for the active item
+ACTIVE_COLOR      = RGBColor(0x00, 0x00, 0x00)  # black; active item stands out via bold
 
 
 # ── Excel reading ────────────────────────────────────────────────────────────
