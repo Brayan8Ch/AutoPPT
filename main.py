@@ -31,10 +31,12 @@ RECT_SZ_H = 137865
 FILL_TRANSVERSAL = f'<a:solidFill xmlns:a="{A_NS}"><a:srgbClr val="00B491"/></a:solidFill>'
 FILL_ESPECIFICO  = f'<a:solidFill xmlns:a="{A_NS}"><a:schemeClr val="tx1"><a:lumMod val="75000"/><a:lumOff val="25000"/></a:schemeClr></a:solidFill>'
 
-# Career sidebar (Tabla 8) — list of section cards on top, careers of the active
-# section in the bottom slot (row 5). The active section/career are emphasised.
-SIDEBAR_MENU_ROWS = 5            # rows 0-4 hold the section menu; row 5 is the career list
-SIDEBAR_LIST_ROW  = 5            # row index that holds the active section's career list
+# Career sidebar (Tabla 8) — section cards on top, careers of the active section
+# in the bottom slot. The active section/career are emphasised. Row layout is read
+# from the template at runtime (see update_career_list); these are the row roles.
+SIDEBAR_LIST_ROW  = 4            # last row of Tabla 8 holds the active section's career list
+SIDEBAR_MENU_ROWS = 4            # rows 0..3 are the section cards
+SIDEBAR_PARA_H    = 265045       # EMU per career line in the list row (font metric)
 ACTIVE_COLOR      = RGBColor(0x00, 0xB4, 0x91)  # teal highlight for the active item
 
 
@@ -352,26 +354,23 @@ def update_career_list(slide, carrera, seccion, secciones):
     """Render the career sidebar (Tabla 8) for the active career.
 
     Layout — "panel inferior":
-      - rows 0..4   : section menu, driven by `secciones['order']`. The active
-                      section is bolded + recoloured.
-      - row 5       : the careers of the active section (from `secciones`), with
-                      the active career bolded.
-      - Grupo 20    : the highlight bar + arrow are moved to point at the active
-                      career within row 5.
-    """
-    # Geometry constants (EMU) — measured from PPTmuestra.pptx
-    GROUP_LOCAL_OFFSET = 112549  # absolute_y + this = local_y in group XML
-    ROW5_TOP  = 2529921          # cumulative top of row 5 (the career list slot)
-    PARA_H    = 265045           # height per career paragraph in row 5
-    RECT_H    = 199429
-    ARROW_H   = 318221
+      - rows 0..SIDEBAR_MENU_ROWS-1 : section cards, driven by `secciones['order']`.
+                                      The active section keeps its card but its text
+                                      is bolded + recoloured.
+      - row SIDEBAR_LIST_ROW        : the careers of the active section, with the
+                                      active career bolded + recoloured.
+      - Grupo 20                    : the highlight bar + arrow are moved to point at
+                                      the active career within the list row.
 
+    Geometry (row positions and the group's coordinate offset) is read from the
+    template at runtime, so the layout survives template edits.
+    """
     shape = find_shape(slide, 'Tabla 8')
     if not shape or not shape.has_table:
         return
     table = shape.table
 
-    # 1) Section menu (rows 0..SIDEBAR_MENU_ROWS-1). Extra rows are blanked.
+    # 1) Section cards (rows 0..SIDEBAR_MENU_ROWS-1). Extra rows are blanked.
     order = secciones.get('order', [])
     for j in range(SIDEBAR_MENU_ROWS):
         if j >= len(table.rows):
@@ -385,22 +384,35 @@ def update_career_list(slide, carrera, seccion, secciones):
         else:
             set_cell(cell, '', bold=False)
 
-    # 2) Career list of the active section (row 5).
+    # 2) Career list of the active section (the list row).
+    if len(table.rows) <= SIDEBAR_LIST_ROW:
+        return
     careers = secciones.get('careers', {}).get(seccion, [])
-    if len(table.rows) > SIDEBAR_LIST_ROW:
-        set_cell_lines(table.rows[SIDEBAR_LIST_ROW].cells[0], careers,
-                       active=carrera, active_color=ACTIVE_COLOR)
+    set_cell_lines(table.rows[SIDEBAR_LIST_ROW].cells[0], careers,
+                   active=carrera, active_color=ACTIVE_COLOR)
 
+    # 3) Point the highlight bar + arrow (inside Grupo 20) at the active career.
+    # Top of the list row = table top + heights of the rows above it.
+    list_row_top = shape.top + sum(table.rows[j].height for j in range(SIDEBAR_LIST_ROW))
     try:
         idx = careers.index(carrera)
     except ValueError:
         idx = 0
-    center_y = int(ROW5_TOP + (idx + 0.5) * PARA_H)
+    center_y = int(list_row_top + (idx + 0.5) * SIDEBAR_PARA_H)
 
-    # 3) Move the highlight rect and arrow (both inside Grupo 20) to that career.
     grupo = find_shape(slide, 'Grupo 20')
     if grupo is None:
         return
+
+    # Convert an absolute Y to the group's child coordinate space: a child renders
+    # at off + (child_local - chOff), so child_local = abs + (chOff - off).
+    group_xfrm = grupo._element.find(f'{{{P_NS}}}grpSpPr/{{{A_NS}}}xfrm')
+    local_offset = 0
+    if group_xfrm is not None:
+        g_off = group_xfrm.find(f'{{{A_NS}}}off')
+        g_choff = group_xfrm.find(f'{{{A_NS}}}chOff')
+        if g_off is not None and g_choff is not None:
+            local_offset = int(g_choff.get('y')) - int(g_off.get('y'))
 
     for child in grupo.shapes:
         is_rect  = 'Rect' in child.name
@@ -408,9 +420,7 @@ def update_career_list(slide, carrera, seccion, secciones):
         if not (is_rect or is_arrow):
             continue
 
-        child_h = RECT_H if is_rect else ARROW_H
-        new_abs_top = center_y - child_h // 2
-        new_local_y = new_abs_top + GROUP_LOCAL_OFFSET
+        new_local_y = center_y - child.height // 2 + local_offset
 
         spPr = child._element.find(f'{{{P_NS}}}spPr')
         if spPr is None:

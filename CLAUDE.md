@@ -33,10 +33,10 @@ All shape mutations rely on **exact shape names** from `PPTmuestra.pptx`. If the
 | Shape name | Updater |
 |---|---|
 | `Tabla 87` | `update_main_table` — pain/hallazgo/accion rows |
-| `Tabla 8` | `update_career_list` — rows 0-4 = section menu (dynamic, active section bolded); row 5 = careers of the active section, active career bolded |
+| `Tabla 8` | `update_career_list` — rows 0-3 = section cards (dynamic, active section bolded); row 4 = careers of the active section, active career bolded |
 | `Tabla 45` | `update_stats` — muestra/desertores/alumnos |
 | `Table 11` | `update_var_table` — var_des_prom/var_periodo_ant |
-| `Grupo 20` | `update_career_list` — arrow + highlight rect, moved to the active career in row 5 |
+| `Grupo 20` | `update_career_list` — arrow + highlight rect, moved to the active career in the list row (row 4) |
 | `Elipse *` | `update_circles` — one per data row, red=profundizar / gray=no_accionable |
 | `Rect *` (AUTO_SHAPE) | `update_rects` — one per data row, teal=transversal / dark=especifico |
 | `Título` / `Titulo` in name + top < 5cm | `update_header` |
@@ -48,7 +48,7 @@ All EMU (English Metric Units) coordinates at the top of `main.py` were measured
 
 - `CIRCLE_*` — circle position/step per row
 - `RECT_*` — separator rectangle position/step per row
-- `GROUP_LOCAL_OFFSET`, `ROW5_TOP`, `PARA_H`, etc. in `update_career_list`
+- `SIDEBAR_PARA_H` in `update_career_list` (row tops and the group coordinate offset are computed at runtime from the template, so they self-adjust)
 
 ## Key constraint: `set_cell`
 
@@ -60,4 +60,4 @@ All EMU (English Metric Units) coordinates at the top of `main.py` were measured
 
 `metadata` sheet columns: `carrera`, `segmento`, `modalidad`, `desercion_carrera`, `desercion_prom`, `muestra`, `desertores`, `alumnos`, `comentarios`, `var_des_prom`, `var_periodo_ant`
 
-`secciones` sheet columns: `seccion`, `carrera` — one row per career. Source of truth for the sidebar grouping; order of rows = display order. Up to 5 sections fit the template menu.
+`secciones` sheet columns: `seccion`, `carrera` — one row per career. Source of truth for the sidebar grouping; order of rows = display order. Up to 4 sections fit the template menu (rows 0-3 of `Tabla 8`; row 4 is the career list).

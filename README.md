@@ -94,10 +94,11 @@ la carrera actual:
 
 **Reglas:**
 - El **orden de las filas** define el orden de aparición (secciones y carreras).
-- La barra + flecha apuntan a la **carrera activa**; la **sección activa** se resalta en
-  negrita y color.
-- El menú soporta hasta **5 secciones** (las filas 0-4 del template). Si hay más, las
-  que sobran no aparecen como tarjeta (la app lo avisa).
+- La barra + flecha apuntan a la **carrera activa**; la **sección activa** mantiene su
+  tarjeta pero se resalta en negrita y color.
+- El menú soporta hasta **4 secciones** (las filas 0-3 del template; la fila 4 es la
+  lista de carreras). Si hay más, las que sobran no aparecen como tarjeta (la app lo
+  avisa). Conviene que las 4 secciones del Excel coincidan con las del template.
 - Si una carrera de `datos` no está en `secciones`, la app avisa y esa carrera no se
   agrupa.
 
