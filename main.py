@@ -1,4 +1,5 @@
 import io
+import os
 import copy
 import openpyxl
 import streamlit as st
@@ -11,6 +12,11 @@ from lxml import etree
 
 P_NS = 'http://schemas.openxmlformats.org/presentationml/2006/main'
 A_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main'
+
+# Default PPT template bundled with the app. Shape mutations target shapes by their
+# exact names in this file (see CLAUDE.md → "Shape targeting"), so it is the
+# reference layout. Users only upload the Excel; the template loads automatically.
+TEMPLATE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'PPTmuestra.pptx')
 
 # Template geometry (EMU) — measured from PPTmuestra.pptx
 CIRCLE_X = 11337402
@@ -516,9 +522,25 @@ def generate_ppt(template_bytes, datos, metadata, secciones):
 
 # ── Streamlit UI ─────────────────────────────────────────────────────────────
 
+def load_template_bytes(uploaded):
+    """Return the PPT template bytes.
+
+    Uses the uploaded file when the user provides one; otherwise falls back to
+    the bundled PPTmuestra.pptx so the user only has to upload the Excel.
+    Returns None if no template is available.
+    """
+    if uploaded is not None:
+        return uploaded.read()
+    if os.path.exists(TEMPLATE_PATH):
+        with open(TEMPLATE_PATH, 'rb') as f:
+            return f.read()
+    return None
+
+
 st.set_page_config(page_title="AutoPPT", page_icon="📊")
 st.title("📊 AutoPPT")
-st.caption("Cargá tu Excel con datos y tu plantilla PPT. Descargá el resultado.")
+st.caption("Cargá tu Excel con datos. La plantilla PPT se usa automáticamente "
+           "(podés subir otra para reemplazarla).")
 
 with st.expander("📋 Formato del Excel requerido"):
     st.markdown("""
@@ -557,9 +579,16 @@ col1, col2 = st.columns(2)
 with col1:
     excel_file = st.file_uploader("📄 Excel con datos", type=["xlsx"])
 with col2:
-    ppt_file = st.file_uploader("📑 Plantilla PPT", type=["pptx"])
+    ppt_file = st.file_uploader("📑 Plantilla PPT (opcional)", type=["pptx"])
 
-if excel_file and ppt_file:
+if ppt_file is not None:
+    st.caption("📑 Usando la plantilla que subiste.")
+elif os.path.exists(TEMPLATE_PATH):
+    st.caption("📑 Usando la plantilla incluida: **PPTmuestra.pptx**.")
+else:
+    st.warning("No se encontró la plantilla incluida `PPTmuestra.pptx`. Subí una plantilla PPT.")
+
+if excel_file:
     try:
         datos, metadata, secciones = read_excel(excel_file.read())
         keys = list({(r.get('carrera'), r.get('segmento'), r.get('modalidad')) for r in datos})
@@ -587,9 +616,12 @@ if excel_file and ppt_file:
                     f"muestra {SIDEBAR_MENU_ROWS} en el menú. Las demás no aparecerán como tarjeta."
                 )
 
-        if st.button("🚀 Generar PPT"):
+        template_bytes = load_template_bytes(ppt_file)
+        if template_bytes is None:
+            st.error("No hay plantilla PPT disponible. Subí una para generar el PPT.")
+        elif st.button("🚀 Generar PPT"):
             with st.spinner("Generando..."):
-                result = generate_ppt(ppt_file.read(), datos, metadata, secciones)
+                result = generate_ppt(template_bytes, datos, metadata, secciones)
             st.success("¡Listo!")
             st.download_button(
                 label="⬇️ Descargar PPT generado",
