@@ -1,0 +1,12 @@
+[theme]
+# Brand teal from PPTmuestra.pptx. primaryColor uses the deeper teal so primary
+# buttons keep white text at >=4.5:1 contrast; the brighter #00B491 is used as a
+# non-text accent in the CSS layer (see main.py).
+primaryColor = "#00897B"
+backgroundColor = "#F6F9F8"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#0F2D28"
+font = "sans serif"
+
+[client]
+toolbarMode = "minimal"

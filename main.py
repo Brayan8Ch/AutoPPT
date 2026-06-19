@@ -537,10 +537,135 @@ def load_template_bytes(uploaded):
     return None
 
 
-st.set_page_config(page_title="AutoPPT", page_icon="📊")
-st.title("📊 AutoPPT")
-st.caption("Cargá tu Excel con datos. La plantilla PPT se usa automáticamente "
-           "(podés subir otra para reemplazarla).")
+_CSS = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  --brand: #00B491;
+  --brand-deep: #00897B;
+  --brand-deeper: #006F63;
+  --ink: #0F2D28;
+  --muted: #3A4D49;
+  --surface: #FFFFFF;
+  --tint: #E4F4F0;
+  --line: #DCE6E3;
+}
+
+html, body, .stApp, [class*="css"] {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Clean chrome for a deployed, non-technical audience */
+#MainMenu, footer { visibility: hidden; }
+[data-testid="stHeader"] { background: transparent; }
+
+.block-container {
+  max-width: 820px;
+  padding-top: 2.5rem;
+  padding-bottom: 4rem;
+}
+
+/* Hero */
+.app-hero { margin-bottom: 1.75rem; }
+.app-pill {
+  display: inline-block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--brand-deep);
+  background: var(--tint);
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+}
+.app-title {
+  margin: 0.75rem 0 0.4rem;
+  font-size: clamp(2.1rem, 5vw, 3rem);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.05;
+  color: var(--ink);
+  text-wrap: balance;
+}
+.app-title::after {
+  content: "";
+  display: block;
+  width: 56px;
+  height: 4px;
+  margin-top: 0.7rem;
+  border-radius: 2px;
+  background: var(--brand);
+}
+.app-sub {
+  margin: 0;
+  max-width: 60ch;
+  font-size: 1.02rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+/* File uploader dropzone */
+[data-testid="stFileUploaderDropzone"] {
+  background: var(--surface);
+  border: 1.5px dashed var(--line);
+  border-radius: 14px;
+  transition: border-color .2s ease, background .2s ease;
+}
+[data-testid="stFileUploaderDropzone"]:hover {
+  border-color: var(--brand);
+  background: #FBFEFD;
+}
+
+/* Buttons */
+.stButton > button, .stDownloadButton > button {
+  width: 100%;
+  border-radius: 10px;
+  font-weight: 600;
+  padding: 0.6rem 1rem;
+  border: none;
+  transition: transform .12s ease, box-shadow .2s ease, background .2s ease;
+}
+.stButton > button[kind="primary"], .stDownloadButton > button[kind="primary"] {
+  background: var(--brand-deep);
+  color: #fff;
+  box-shadow: 0 6px 16px -6px rgba(0, 137, 123, 0.55);
+}
+.stButton > button[kind="primary"]:hover, .stDownloadButton > button[kind="primary"]:hover {
+  background: var(--brand-deeper);
+  transform: translateY(-1px);
+}
+.stButton > button[kind="primary"]:active, .stDownloadButton > button[kind="primary"]:active {
+  transform: translateY(0);
+}
+
+/* Expander */
+[data-testid="stExpander"] {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stButton > button, .stDownloadButton > button,
+  [data-testid="stFileUploaderDropzone"] { transition: none; }
+  .stButton > button[kind="primary"]:hover,
+  .stDownloadButton > button[kind="primary"]:hover { transform: none; }
+}
+</style>
+"""
+
+st.set_page_config(page_title="AutoPPT", page_icon="📊", layout="centered")
+st.markdown(_CSS, unsafe_allow_html=True)
+st.markdown(
+    """
+    <div class="app-hero">
+      <span class="app-pill">Generador de presentaciones</span>
+      <h1 class="app-title">AutoPPT</h1>
+      <p class="app-sub">Convertí tu Excel de hallazgos en una presentación lista para
+      revisar. Subí el archivo y descargá el PPT generado.</p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 with st.expander("📋 Formato del Excel requerido"):
     st.markdown("""
@@ -619,7 +744,7 @@ if excel_file:
         template_bytes = load_template_bytes(ppt_file)
         if template_bytes is None:
             st.error("No hay plantilla PPT disponible. Subí una para generar el PPT.")
-        elif st.button("🚀 Generar PPT"):
+        elif st.button("🚀 Generar PPT", type="primary"):
             with st.spinner("Generando..."):
                 result = generate_ppt(template_bytes, datos, metadata, secciones)
             st.success("¡Listo!")
@@ -628,6 +753,7 @@ if excel_file:
                 data=result,
                 file_name="resultado.pptx",
                 mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                type="primary",
             )
     except Exception as e:
         st.error(f"Error: {e}")
