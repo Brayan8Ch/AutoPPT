@@ -353,52 +353,69 @@ def update_rects(slide, separadores):
 def update_career_list(slide, carrera, seccion, secciones):
     """Render the career sidebar (Tabla 8) for the active career.
 
-    Layout — "panel inferior":
-      - rows 0..SIDEBAR_MENU_ROWS-1 : section cards, driven by `secciones['order']`.
-                                      The active section keeps its card but its text
-                                      is bolded + recoloured.
-      - row SIDEBAR_LIST_ROW        : the careers of the active section, with the
-                                      active career bolded + recoloured.
-      - Grupo 20                    : the highlight bar + arrow are moved to point at
-                                      the active career within the list row.
+    Layout — "inline expansion": the careers of the active section appear directly
+    below that section's card, pushing the sections below it down. Example (active
+    section = Salud):
 
-    Geometry (row positions and the group's coordinate offset) is read from the
-    template at runtime, so the layout survives template edits.
+        Carreras Masivas
+        Carreras Faco
+        Salud              ← active section card (bolded + recoloured)
+          Medicina         ← active career (bolded + arrow)
+          Enfermería
+          Obstetricia
+        Carreras No Masivas
+
+    Implementation: the template's single list row (SIDEBAR_LIST_ROW) is filled with
+    the active section's careers and its `<a:tr>` is moved to sit right after the
+    active section's card. The highlight bar + arrow (Grupo 20) point at the active
+    career. Geometry (row heights, group coordinate offset) is read at runtime, so
+    the layout survives template edits.
     """
     shape = find_shape(slide, 'Tabla 8')
     if not shape or not shape.has_table:
         return
     table = shape.table
+    if len(table.rows) <= SIDEBAR_LIST_ROW:
+        return
 
-    # 1) Section cards (rows 0..SIDEBAR_MENU_ROWS-1). Extra rows are blanked.
     order = secciones.get('order', [])
+    card_heights = [table.rows[j].height for j in range(SIDEBAR_MENU_ROWS)]
+
+    # 1) Section cards. Extra rows are blanked. Remember the active card's index.
+    active_k = None
     for j in range(SIDEBAR_MENU_ROWS):
-        if j >= len(table.rows):
-            break
         cell = table.rows[j].cells[0]
         if j < len(order):
             sec = order[j]
             is_active = sec == seccion
+            if is_active:
+                active_k = j
             set_cell(cell, sec, bold=is_active,
                      color=ACTIVE_COLOR if is_active else None)
         else:
             set_cell(cell, '', bold=False)
 
-    # 2) Career list of the active section (the list row).
-    if len(table.rows) <= SIDEBAR_LIST_ROW:
-        return
+    # 2) Fill the list row with the active section's careers.
     careers = secciones.get('careers', {}).get(seccion, [])
     set_cell_lines(table.rows[SIDEBAR_LIST_ROW].cells[0], careers,
                    active=carrera, active_color=ACTIVE_COLOR)
 
-    # 3) Point the highlight bar + arrow (inside Grupo 20) at the active career.
-    # Top of the list row = table top + heights of the rows above it.
-    list_row_top = shape.top + sum(table.rows[j].height for j in range(SIDEBAR_LIST_ROW))
+    # 3) Move the list row inline — right after the active section's card.
+    trs = table._tbl.findall(f'{{{A_NS}}}tr')
+    list_tr = trs[SIDEBAR_LIST_ROW]
+    if active_k is not None:
+        trs[active_k].addnext(list_tr)
+        rows_before = active_k + 1          # cards 0..active_k precede the list
+    else:
+        rows_before = SIDEBAR_MENU_ROWS     # unknown section → leave list at bottom
+
+    # 4) Point the highlight bar + arrow (inside Grupo 20) at the active career.
+    list_top = shape.top + sum(card_heights[:rows_before])
     try:
         idx = careers.index(carrera)
     except ValueError:
         idx = 0
-    center_y = int(list_row_top + (idx + 0.5) * SIDEBAR_PARA_H)
+    center_y = int(list_top + (idx + 0.5) * SIDEBAR_PARA_H)
 
     grupo = find_shape(slide, 'Grupo 20')
     if grupo is None:

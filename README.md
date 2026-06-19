@@ -74,31 +74,34 @@ la agrupación NO se deriva de `tipo_carrera` ni de `area`, se escribe acá a ma
 | Salud | Enfermería |
 
 Para cada slide, la barra lateral muestra **las tarjetas de todas las secciones** y,
-debajo, **solo las carreras de la sección a la que pertenece esa carrera**, resaltando
-la carrera actual:
+**justo debajo de la sección activa** (expansión inline), **solo las carreras de esa
+sección**, resaltando la carrera actual:
 
 ```
 ╔════════════════════╗
 ║ Carreras Masivas   ║
 ╠════════════════════╣
+║ Carreras Faco      ║
+╠════════════════════╣
 ║ Salud           ◀  ║  ← sección activa (negrita + color)
+╟────────────────────╢
+║   Medicina      ◀  ║  ← carrera activa (negrita + barra/flecha)
+║   Enfermería       ║
+║   Obstetricia      ║
 ╠════════════════════╣
 ║ Carreras No Masivas║
 ╚════════════════════╝
-······················
-  Medicina         ◀    ← carrera activa (negrita + barra/flecha)
-  Farm. y Bioq
-  Enfermería
-  Psicología
 ```
 
 **Reglas:**
 - El **orden de las filas** define el orden de aparición (secciones y carreras).
-- La barra + flecha apuntan a la **carrera activa**; la **sección activa** mantiene su
-  tarjeta pero se resalta en negrita y color.
+- Las carreras de la sección activa se insertan **inline**, debajo de su tarjeta,
+  empujando las secciones de abajo. La barra + flecha apuntan a la **carrera activa**;
+  la **sección activa** mantiene su tarjeta pero se resalta en negrita y color.
 - El menú soporta hasta **4 secciones** (las filas 0-3 del template; la fila 4 es la
-  lista de carreras). Si hay más, las que sobran no aparecen como tarjeta (la app lo
-  avisa). Conviene que las 4 secciones del Excel coincidan con las del template.
+  fila de lista que se mueve inline). Si hay más, las que sobran no aparecen como
+  tarjeta (la app lo avisa). Conviene que las 4 secciones del Excel coincidan con las
+  del template.
 - Si una carrera de `datos` no está en `secciones`, la app avisa y esa carrera no se
   agrupa.
 

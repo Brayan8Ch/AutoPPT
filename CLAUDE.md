@@ -33,10 +33,10 @@ All shape mutations rely on **exact shape names** from `PPTmuestra.pptx`. If the
 | Shape name | Updater |
 |---|---|
 | `Tabla 87` | `update_main_table` — pain/hallazgo/accion rows |
-| `Tabla 8` | `update_career_list` — rows 0-3 = section cards (dynamic, active section bolded); row 4 = careers of the active section, active career bolded |
+| `Tabla 8` | `update_career_list` — rows 0-3 = section cards (dynamic, active section bolded); row 4 = list row, filled with the active section's careers and moved inline right after the active section's card |
 | `Tabla 45` | `update_stats` — muestra/desertores/alumnos |
 | `Table 11` | `update_var_table` — var_des_prom/var_periodo_ant |
-| `Grupo 20` | `update_career_list` — arrow + highlight rect, moved to the active career in the list row (row 4) |
+| `Grupo 20` | `update_career_list` — arrow + highlight rect, moved to the active career in the (inline) list row |
 | `Elipse *` | `update_circles` — one per data row, red=profundizar / gray=no_accionable |
 | `Rect *` (AUTO_SHAPE) | `update_rects` — one per data row, teal=transversal / dark=especifico |
 | `Título` / `Titulo` in name + top < 5cm | `update_header` |
