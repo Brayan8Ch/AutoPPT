@@ -5,6 +5,7 @@ import streamlit as st
 from collections import defaultdict
 from pptx import Presentation
 from pptx.util import Emu
+from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 from lxml import etree
 
@@ -30,6 +31,12 @@ RECT_SZ_H = 137865
 FILL_TRANSVERSAL = f'<a:solidFill xmlns:a="{A_NS}"><a:srgbClr val="00B491"/></a:solidFill>'
 FILL_ESPECIFICO  = f'<a:solidFill xmlns:a="{A_NS}"><a:schemeClr val="tx1"><a:lumMod val="75000"/><a:lumOff val="25000"/></a:schemeClr></a:solidFill>'
 
+# Career sidebar (Tabla 8) — list of section cards on top, careers of the active
+# section in the bottom slot (row 5). The active section/career are emphasised.
+SIDEBAR_MENU_ROWS = 5            # rows 0-4 hold the section menu; row 5 is the career list
+SIDEBAR_LIST_ROW  = 5            # row index that holds the active section's career list
+ACTIVE_COLOR      = RGBColor(0x00, 0xB4, 0x91)  # teal highlight for the active item
+
 
 # ── Excel reading ────────────────────────────────────────────────────────────
 
@@ -52,7 +59,45 @@ def read_excel(excel_bytes):
             d = dict(zip(headers, [c.value for c in row]))
             meta[(d['carrera'], d['segmento'], d['modalidad'])] = d
 
-    return datos, meta
+    secciones = read_secciones(wb)
+
+    return datos, meta, secciones
+
+
+def read_secciones(wb):
+    """Read the `secciones` sheet (columns: seccion, carrera) — the single source
+    of truth for which careers belong to which section, and in what order.
+
+    Returns a dict with:
+      - order:     section names, in first-seen order (the sidebar menu).
+      - careers:   {section: [careers in sheet order]}.
+      - by_career: {career: section}, for reverse lookup.
+    """
+    order = []
+    careers = {}
+    by_career = {}
+
+    if 'secciones' not in wb.sheetnames:
+        return {'order': order, 'careers': careers, 'by_career': by_career}
+
+    ws = wb['secciones']
+    headers = [c.value for c in ws[1]]
+    for row in ws.iter_rows(min_row=2):
+        if not any(c.value for c in row):
+            continue
+        d = dict(zip(headers, [c.value for c in row]))
+        seccion = (d.get('seccion') or '').strip() if isinstance(d.get('seccion'), str) else d.get('seccion')
+        carrera = (d.get('carrera') or '').strip() if isinstance(d.get('carrera'), str) else d.get('carrera')
+        if not seccion or not carrera:
+            continue
+        if seccion not in careers:
+            careers[seccion] = []
+            order.append(seccion)
+        if carrera not in careers[seccion]:
+            careers[seccion].append(carrera)
+        by_career[carrera] = seccion
+
+    return {'order': order, 'careers': careers, 'by_career': by_career}
 
 
 # ── Slide cloning ────────────────────────────────────────────────────────────
@@ -80,8 +125,12 @@ def find_shape(slide, name):
     return next((s for s in slide.shapes if s.name == name), None)
 
 
-def set_cell(cell, text):
-    """Overwrite cell text preserving first-run formatting."""
+def set_cell(cell, text, bold=None, color=None):
+    """Overwrite cell text preserving first-run formatting.
+
+    Optionally force `bold` and/or font `color` (an RGBColor) on the run —
+    used to emphasise the active item in the career sidebar.
+    """
     tf = cell.text_frame
     if not tf.paragraphs:
         return
@@ -89,11 +138,51 @@ def set_cell(cell, text):
     for p in tf.paragraphs[1:]:
         p._p.getparent().remove(p._p)
     if para.runs:
-        para.runs[0].text = str(text) if text is not None else ''
+        run = para.runs[0]
+        run.text = str(text) if text is not None else ''
         for r in para.runs[1:]:
             r._r.getparent().remove(r._r)
     else:
-        para.add_run().text = str(text) if text is not None else ''
+        run = para.add_run()
+        run.text = str(text) if text is not None else ''
+    if bold is not None:
+        run.font.bold = bold
+    if color is not None:
+        run.font.color.rgb = color
+
+
+def set_cell_lines(cell, lines, active=None, active_color=None):
+    """Fill a cell with one paragraph per line, cloning the first paragraph so
+    every line keeps the template's run formatting.
+
+    If `active` matches a line, that line is bolded (and recoloured when
+    `active_color` is given). Used for the career list in the sidebar.
+    """
+    tf = cell.text_frame
+    if not tf.paragraphs:
+        return
+    lines = [str(l) for l in (lines or [''])]
+
+    # Match paragraph count to line count by cloning the first paragraph.
+    while len(tf.paragraphs) < len(lines):
+        clone = copy.deepcopy(tf.paragraphs[0]._p)
+        tf.paragraphs[-1]._p.addnext(clone)
+    while len(tf.paragraphs) > len(lines):
+        tf.paragraphs[-1]._p.getparent().remove(tf.paragraphs[-1]._p)
+
+    for para, line in zip(tf.paragraphs, lines):
+        if para.runs:
+            run = para.runs[0]
+            run.text = line
+            for r in para.runs[1:]:
+                r._r.getparent().remove(r._r)
+        else:
+            run = para.add_run()
+            run.text = line
+        is_active = active is not None and line == active
+        run.font.bold = True if is_active else None
+        if is_active and active_color is not None:
+            run.font.color.rgb = active_color
 
 
 # ── Per-slide updaters ───────────────────────────────────────────────────────
@@ -259,42 +348,56 @@ def update_rects(slide, separadores):
             spPr.append(new_fill)
 
 
-def update_career_list(slide, carrera, tipo_carrera, area=''):
-    """Move the arrow + highlight rect to the row matching the current carrera."""
-    # Geometry constants (EMU) — from PPTmuestra.pptx analysis
+def update_career_list(slide, carrera, seccion, secciones):
+    """Render the career sidebar (Tabla 8) for the active career.
+
+    Layout — "panel inferior":
+      - rows 0..4   : section menu, driven by `secciones['order']`. The active
+                      section is bolded + recoloured.
+      - row 5       : the careers of the active section (from `secciones`), with
+                      the active career bolded.
+      - Grupo 20    : the highlight bar + arrow are moved to point at the active
+                      career within row 5.
+    """
+    # Geometry constants (EMU) — measured from PPTmuestra.pptx
     GROUP_LOCAL_OFFSET = 112549  # absolute_y + this = local_y in group XML
-    ROW3_TOP  = 1795546          # cumulative top of row 3 in Tabla 8
-    ROW3_H    = 296091
-    ROW5_TOP  = 2529921          # cumulative top of row 5 (No Masivas list)
+    ROW5_TOP  = 2529921          # cumulative top of row 5 (the career list slot)
     PARA_H    = 265045           # height per career paragraph in row 5
     RECT_H    = 199429
     ARROW_H   = 318221
 
-    tipo_lower = (tipo_carrera or '').lower()
-    no_masivas = 'no masivas' in tipo_lower
+    shape = find_shape(slide, 'Tabla 8')
+    if not shape or not shape.has_table:
+        return
+    table = shape.table
 
-    if no_masivas:
-        # Find carrera index in row 5 paragraphs
-        shape = find_shape(slide, 'Tabla 8')
-        if not shape or not shape.has_table:
-            return
-        paras = shape.table.rows[5].cells[0].text_frame.paragraphs
-        names = [p.text.strip() for p in paras]
-        try:
-            idx = names.index(carrera)
-        except ValueError:
-            return
-        center_y = int(ROW5_TOP + (idx + 0.5) * PARA_H)
-    else:
-        # Update row 3 text and point there
-        shape = find_shape(slide, 'Tabla 8')
-        if shape and shape.has_table:
-            if area:
-                set_cell(shape.table.rows[2].cells[0], area)
-            set_cell(shape.table.rows[3].cells[0], carrera)
-        center_y = ROW3_TOP + ROW3_H // 2
+    # 1) Section menu (rows 0..SIDEBAR_MENU_ROWS-1). Extra rows are blanked.
+    order = secciones.get('order', [])
+    for j in range(SIDEBAR_MENU_ROWS):
+        if j >= len(table.rows):
+            break
+        cell = table.rows[j].cells[0]
+        if j < len(order):
+            sec = order[j]
+            is_active = sec == seccion
+            set_cell(cell, sec, bold=is_active,
+                     color=ACTIVE_COLOR if is_active else None)
+        else:
+            set_cell(cell, '', bold=False)
 
-    # Move the highlight rect and arrow (both are inside Grupo 20)
+    # 2) Career list of the active section (row 5).
+    careers = secciones.get('careers', {}).get(seccion, [])
+    if len(table.rows) > SIDEBAR_LIST_ROW:
+        set_cell_lines(table.rows[SIDEBAR_LIST_ROW].cells[0], careers,
+                       active=carrera, active_color=ACTIVE_COLOR)
+
+    try:
+        idx = careers.index(carrera)
+    except ValueError:
+        idx = 0
+    center_y = int(ROW5_TOP + (idx + 0.5) * PARA_H)
+
+    # 3) Move the highlight rect and arrow (both inside Grupo 20) to that career.
     grupo = find_shape(slide, 'Grupo 20')
     if grupo is None:
         return
@@ -341,7 +444,7 @@ def update_var_table(slide, var_des_prom, var_periodo_ant):
 
 # ── Main generator ───────────────────────────────────────────────────────────
 
-def generate_ppt(template_bytes, datos, metadata):
+def generate_ppt(template_bytes, datos, metadata, secciones):
     template_prs = Presentation(io.BytesIO(template_bytes))
     template_slide = template_prs.slides[0]
 
@@ -370,9 +473,10 @@ def generate_ppt(template_bytes, datos, metadata):
         update_circles(slide, niveles)
         update_rects(slide, separadores)
 
-        tipo_carrera = rows[0].get('tipo_carrera', '')
-        area = rows[0].get('area', '')
-        update_career_list(slide, carrera, tipo_carrera, area)
+        # Section comes from the `secciones` sheet (source of truth); fall back
+        # to the datos `tipo_carrera` column only if the career is unmapped.
+        seccion = secciones['by_career'].get(carrera) or rows[0].get('tipo_carrera', '')
+        update_career_list(slide, carrera, seccion, secciones)
 
         update_stats(slide, meta.get('muestra'), meta.get('desertores'), meta.get('alumnos'))
         update_var_table(slide, meta.get('var_des_prom'), meta.get('var_periodo_ant'))
@@ -407,6 +511,19 @@ with st.expander("📋 Formato del Excel requerido"):
 |---|---|---|---|---|---|---|---|---|---|---|
 
 `comentarios`: usá Alt+Enter dentro de la celda para múltiples líneas.
+
+---
+
+**Hoja `secciones`** — define a qué sección pertenece cada carrera (una fila por carrera):
+
+| seccion | carrera |
+|---|---|
+| Carreras Masivas | Contabilidad |
+| Salud | Medicina |
+
+En cada slide, la barra lateral muestra las tarjetas de sección y, debajo, **solo las
+carreras de la sección de esa carrera**, resaltando la actual. El orden de las filas
+define el orden en que aparecen. Soporta hasta 5 secciones en el menú.
     """)
 
 col1, col2 = st.columns(2)
@@ -417,13 +534,35 @@ with col2:
 
 if excel_file and ppt_file:
     try:
-        datos, metadata = read_excel(excel_file.read())
+        datos, metadata, secciones = read_excel(excel_file.read())
         keys = list({(r.get('carrera'), r.get('segmento'), r.get('modalidad')) for r in datos})
         st.info(f"Se generarán **{len(keys)} slides** para {len(datos)} filas de datos.")
 
+        # Validación de la hoja `secciones`.
+        if not secciones['order']:
+            st.warning(
+                "No se encontró la hoja **`secciones`** (o está vacía). "
+                "La barra lateral de carreras no se podrá agrupar por sección."
+            )
+        else:
+            sin_seccion = sorted({
+                r.get('carrera') for r in datos
+                if r.get('carrera') and r.get('carrera') not in secciones['by_career']
+            })
+            if sin_seccion:
+                st.warning(
+                    "Estas carreras de `datos` no están en la hoja `secciones` y "
+                    "no se agruparán: " + ", ".join(sin_seccion)
+                )
+            if len(secciones['order']) > SIDEBAR_MENU_ROWS:
+                st.warning(
+                    f"Hay {len(secciones['order'])} secciones pero el template solo "
+                    f"muestra {SIDEBAR_MENU_ROWS} en el menú. Las demás no aparecerán como tarjeta."
+                )
+
         if st.button("🚀 Generar PPT"):
             with st.spinner("Generando..."):
-                result = generate_ppt(ppt_file.read(), datos, metadata)
+                result = generate_ppt(ppt_file.read(), datos, metadata, secciones)
             st.success("¡Listo!")
             st.download_button(
                 label="⬇️ Descargar PPT generado",

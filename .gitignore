@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Excel lock files
+~$*.xlsx
+
+# Agent tooling
+.atl/
+
+# Test artifacts
+_test_out.pptx
