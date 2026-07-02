@@ -1,3 +1,3 @@
-streamlit
-python-pptx
-openpyxl
+streamlit==1.58.0
+python-pptx==1.0.2
+openpyxl==3.1.5
