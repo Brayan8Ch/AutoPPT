@@ -251,14 +251,15 @@ def pct1(value):
         return str(value)
 
 
-def update_header(slide, carrera, segmento, modalidad, des_carrera, des_prom, pg, total):
+def update_header(slide, carrera, segmento, modalidad, des_carrera, des_prom, pg, total, es_nps=False):
+    metrica = 'NPS' if es_nps else 'Deserción'
     for shape in slide.shapes:
         if shape.has_text_frame and shape.top / 360000 < 5:
             if 'Título' in shape.name or 'Titulo' in shape.name:
                 text = (
                     f"{carrera} – {segmento} – {modalidad}"
-                    f"  |  Deserción Carrera: {pct1(des_carrera)}"
-                    f"   |   Deserción Prom.: {pct1(des_prom)}\t    \t      ({pg} de {total})"
+                    f"  |  {metrica} Carrera: {pct1(des_carrera)}"
+                    f"   |   {metrica} Prom.: {pct1(des_prom)}\t    \t      ({pg} de {total})"
                 )
                 tf = shape.text_frame
                 if tf.paragraphs and tf.paragraphs[0].runs:
@@ -512,12 +513,13 @@ def update_career_list(slide, carrera, seccion, secciones):
             off.set('y', str(new_local_y))
 
 
-def update_stats(slide, muestra, desertores, alumnos):
+def update_stats(slide, muestra, desertores, alumnos, es_nps=False):
     shape = find_shape(slide, 'Tabla 45')
     if not shape or not shape.has_table:
         return
     t = shape.table
     set_cell(t.rows[0].cells[1], muestra)
+    set_cell(t.rows[1].cells[0], 'Encuestados' if es_nps else 'Desertores')
     set_cell(t.rows[1].cells[1], desertores)
     set_cell(t.rows[2].cells[1], alumnos)
 
@@ -581,7 +583,7 @@ def update_footer_matrix(slide, segmento, modalidad):
 
 # ── Main generator ───────────────────────────────────────────────────────────
 
-def generate_ppt(template_bytes, datos, metadata, secciones):
+def generate_ppt(template_bytes, datos, metadata, secciones, es_nps=False):
     template_prs = Presentation(io.BytesIO(template_bytes))
     template_slide = template_prs.slides[0]
 
@@ -608,7 +610,7 @@ def generate_ppt(template_bytes, datos, metadata, secciones):
         update_header(slide, carrera, segmento, modalidad,
                       meta.get('desercion_carrera', ''),
                       meta.get('desercion_prom', ''),
-                      pg, total)
+                      pg, total, es_nps)
 
         table_rows = [(r.get('pain'), r.get('hallazgo'), r.get('accion')) for r in rows]
         update_main_table(slide, table_rows)
@@ -623,7 +625,7 @@ def generate_ppt(template_bytes, datos, metadata, secciones):
         seccion = secciones['by_career'].get(carrera) or rows[0].get('tipo_carrera', '')
         update_career_list(slide, carrera, seccion, secciones)
 
-        update_stats(slide, meta.get('muestra'), meta.get('desertores'), meta.get('alumnos'))
+        update_stats(slide, meta.get('muestra'), meta.get('desertores'), meta.get('alumnos'), es_nps)
         update_var_table(slide, meta.get('var_des_prom'), meta.get('var_periodo_ant'))
         update_footer_matrix(slide, segmento, modalidad)
         update_comments(slide, meta.get('comentarios'))
@@ -821,6 +823,8 @@ with col1:
 with col2:
     ppt_file = st.file_uploader("📑 Plantilla PPT (opcional)", type=["pptx"])
 
+es_nps = st.radio("Métrica", ["Deserción", "NPS"], horizontal=True) == "NPS"
+
 if ppt_file is not None:
     st.caption("📑 Usando la plantilla que subiste.")
 elif os.path.exists(TEMPLATE_PATH):
@@ -886,7 +890,7 @@ if excel_file:
             st.error("No hay plantilla PPT disponible. Subí una para generar el PPT.")
         elif st.button("🚀 Generar PPT", type="primary"):
             with st.spinner("Generando..."):
-                result = generate_ppt(template_bytes, datos, metadata, secciones)
+                result = generate_ppt(template_bytes, datos, metadata, secciones, es_nps)
             st.success("¡Listo!")
             st.download_button(
                 label="⬇️ Descargar PPT generado",
