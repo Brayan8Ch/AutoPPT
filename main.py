@@ -63,6 +63,23 @@ VAR_COLORS = {
     'muy encima': RGBColor(0x00, 0x80, 0x00),
 }
 
+# Footer age×modality matrix (Tabla 42, 2x9). The active `segmento` header goes
+# red; within its group the mapped `modalidad` cell is strong red and the other
+# two are light red. Every cell of the inactive age groups stays grey.
+MATRIX_AGES = ['nuevos', 'año 1', 'antiguos']                    # header cols 0,3,6
+MATRIX_MODS = ['presencial', 'semipresencial', 'a distancia']    # offset 0,1,2 per group
+MATRIX_MOD_MAP = {                                               # raw modalidad → category
+    'cgt 50/50':   'semipresencial',
+    'cgt 80/20':   'semipresencial',
+    'a distancia': 'a distancia',
+    'preg':        'presencial',
+}
+MATRIX_RED  = RGBColor(0xC0, 0x00, 0x00)   # active header / selected modalidad
+MATRIX_PINK = RGBColor(0xF6, 0xD9, 0xD9)   # sibling modalidad of the active age
+MATRIX_GREY = RGBColor(0xD9, 0xD9, 0xD9)   # inactive
+MATRIX_TEXT_ON_RED  = RGBColor(0xFF, 0xFF, 0xFF)
+MATRIX_TEXT_DEFAULT = RGBColor(0x59, 0x59, 0x59)  # matches template tx1 65%
+
 
 # ── Excel reading ────────────────────────────────────────────────────────────
 
@@ -511,6 +528,49 @@ def update_var_table(slide, var_des_prom, var_periodo_ant):
             cell.fill.fore_color.rgb = color
 
 
+def update_footer_matrix(slide, segmento, modalidad):
+    """Colour Tabla 42 (age × modality) for the slide's segmento + modalidad.
+
+    Returns True if both matched a known age/modality, False otherwise (in which
+    case the unmatched axis stays fully grey — a visible cue that the value is off).
+    """
+    shape = find_shape(slide, 'Tabla 42')
+    if not shape or not shape.has_table:
+        return True
+    t = shape.table
+
+    age = str(segmento or '').strip().lower()
+    active_group = MATRIX_AGES.index(age) if age in MATRIX_AGES else None
+
+    mod = MATRIX_MOD_MAP.get(str(modalidad or '').strip().lower())
+    active_mod = MATRIX_MODS.index(mod) if mod in MATRIX_MODS else None
+
+    def paint(cell, fill, text):
+        cell.fill.solid()
+        cell.fill.fore_color.rgb = fill
+        for para in cell.text_frame.paragraphs:
+            for run in para.runs:
+                run.font.color.rgb = text
+
+    for g in range(3):  # row 0: age headers at cols 0, 3, 6
+        active = g == active_group
+        paint(t.rows[0].cells[g * 3],
+              MATRIX_RED if active else MATRIX_GREY,
+              MATRIX_TEXT_ON_RED if active else MATRIX_TEXT_DEFAULT)
+
+    for g in range(3):  # row 1: three modality cells per group
+        for o in range(3):
+            cell = t.rows[1].cells[g * 3 + o]
+            if g == active_group and o == active_mod:
+                paint(cell, MATRIX_RED, MATRIX_TEXT_ON_RED)
+            elif g == active_group:
+                paint(cell, MATRIX_PINK, MATRIX_TEXT_DEFAULT)
+            else:
+                paint(cell, MATRIX_GREY, MATRIX_TEXT_DEFAULT)
+
+    return active_group is not None and active_mod is not None
+
+
 # ── Main generator ───────────────────────────────────────────────────────────
 
 def generate_ppt(template_bytes, datos, metadata, secciones):
@@ -557,6 +617,7 @@ def generate_ppt(template_bytes, datos, metadata, secciones):
 
         update_stats(slide, meta.get('muestra'), meta.get('desertores'), meta.get('alumnos'))
         update_var_table(slide, meta.get('var_des_prom'), meta.get('var_periodo_ant'))
+        update_footer_matrix(slide, segmento, modalidad)
         update_comments(slide, meta.get('comentarios'))
 
         apply_font(slide)
