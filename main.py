@@ -519,7 +519,7 @@ def update_stats(slide, muestra, desertores, alumnos, es_nps=False):
         return
     t = shape.table
     set_cell(t.rows[0].cells[1], muestra)
-    set_cell(t.rows[1].cells[0], 'Encuestados' if es_nps else 'Desertores')
+    set_cell(t.rows[1].cells[0], 'Encuestado' if es_nps else 'Desertores')
     set_cell(t.rows[1].cells[1], desertores)
     set_cell(t.rows[2].cells[1], alumnos)
 
