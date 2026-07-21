@@ -53,6 +53,16 @@ SIDEBAR_MENU_ROWS = 4            # rows 0..3 are the section cards
 SIDEBAR_PARA_H    = 265045       # EMU per career line in the list row (font metric)
 ACTIVE_COLOR      = RGBColor(0x00, 0x00, 0x00)  # black; active item stands out via bold
 
+# Footer variation table (Table 11) — cell background per value, white text.
+VAR_TEXT_COLOR = RGBColor(0xFF, 0xFF, 0xFF)
+VAR_COLORS = {
+    'muy debajo': RGBColor(0xC0, 0x00, 0x00),
+    'debajo':     RGBColor(0xFF, 0x00, 0x00),
+    'igual':      RGBColor(0xAF, 0xAB, 0xAB),
+    'encima':     RGBColor(0x92, 0xD0, 0x50),
+    'muy encima': RGBColor(0x00, 0x80, 0x00),
+}
+
 
 # ── Excel reading ────────────────────────────────────────────────────────────
 
@@ -492,8 +502,13 @@ def update_var_table(slide, var_des_prom, var_periodo_ant):
     if not shape or not shape.has_table:
         return
     t = shape.table
-    set_cell(t.rows[1].cells[0], var_des_prom)
-    set_cell(t.rows[1].cells[1], var_periodo_ant)
+    for i, value in enumerate((var_des_prom, var_periodo_ant)):
+        cell = t.rows[1].cells[i]
+        set_cell(cell, value, color=VAR_TEXT_COLOR)
+        color = VAR_COLORS.get(str(value).strip().lower()) if value else None
+        if color:
+            cell.fill.solid()
+            cell.fill.fore_color.rgb = color
 
 
 # ── Main generator ───────────────────────────────────────────────────────────
@@ -749,6 +764,31 @@ if excel_file:
         datos, metadata, secciones = read_excel(excel_file.read())
         keys = list({(r.get('carrera'), r.get('segmento'), r.get('modalidad')) for r in datos})
         st.info(f"Se generarán **{len(keys)} slides** para {len(datos)} filas de datos.")
+
+        # Validación de `metadata`: sin fila coincidente, la slide sale sin
+        # muestra/desertores/alumnos, variaciones ni comentarios.
+        sin_meta = sorted(k for k in keys if k not in metadata)
+        if sin_meta:
+            st.warning(
+                "Estas combinaciones de `datos` no tienen fila en `metadata` "
+                "(carrera + segmento + modalidad deben coincidir exactamente). "
+                "Sus slides saldrán sin muestra, desertores, alumnos, variaciones "
+                "ni comentarios:\n\n"
+                + "\n".join(f"- {c} | {s} | {m}" for c, s, m in sin_meta)
+            )
+
+        valores_var = {
+            str(v).strip() for k in keys if k in metadata
+            for v in (metadata[k].get('var_des_prom'), metadata[k].get('var_periodo_ant'))
+            if v
+        }
+        desconocidos = sorted(v for v in valores_var if v.lower() not in VAR_COLORS)
+        if desconocidos:
+            st.warning(
+                "Valores de variación sin color asignado (quedan con el fondo del "
+                "template): " + ", ".join(desconocidos)
+                + ". Valores válidos: " + ", ".join(sorted(VAR_COLORS))
+            )
 
         # Validación de la hoja `secciones`.
         if not secciones['order']:
