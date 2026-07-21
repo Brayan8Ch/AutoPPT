@@ -1,6 +1,7 @@
 import io
 import os
 import copy
+import math
 import openpyxl
 import streamlit as st
 from collections import defaultdict
@@ -17,6 +18,9 @@ A_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main'
 # exact names in this file (see CLAUDE.md → "Shape targeting"), so it is the
 # reference layout. Users only upload the Excel; the template loads automatically.
 TEMPLATE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'PPTmuestra.pptx')
+
+# Max data rows that fit the template slide; extra rows spill to a new slide.
+MAX_ROWS_PER_SLIDE = 5
 
 # Template geometry (EMU) — measured from PPTmuestra.pptx
 CIRCLE_X = 11337402
@@ -488,7 +492,15 @@ def generate_ppt(template_bytes, datos, metadata, secciones):
         key = (row.get('carrera'), row.get('segmento'), row.get('modalidad'))
         groups[key].append(row)
 
-    for i, (key, rows) in enumerate(groups.items()):
+    # Split each group into slides of at most MAX_ROWS_PER_SLIDE rows.
+    pages = []
+    for key, rows in groups.items():
+        total = math.ceil(len(rows) / MAX_ROWS_PER_SLIDE) or 1
+        for pg in range(total):
+            chunk = rows[pg * MAX_ROWS_PER_SLIDE:(pg + 1) * MAX_ROWS_PER_SLIDE]
+            pages.append((key, chunk, pg + 1, total))
+
+    for i, (key, rows, pg, total) in enumerate(pages):
         carrera, segmento, modalidad = key
         meta = metadata.get(key, {})
         slide = output_prs.slides[0] if i == 0 else clone_slide(output_prs, template_slide)
@@ -496,7 +508,7 @@ def generate_ppt(template_bytes, datos, metadata, secciones):
         update_header(slide, carrera, segmento, modalidad,
                       meta.get('desercion_carrera', ''),
                       meta.get('desercion_prom', ''),
-                      1, 1)
+                      pg, total)
 
         table_rows = [(r.get('pain'), r.get('hallazgo'), r.get('accion')) for r in rows]
         update_main_table(slide, table_rows)
