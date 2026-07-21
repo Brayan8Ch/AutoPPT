@@ -9,6 +9,7 @@ from pptx import Presentation
 from pptx.util import Emu
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE_TYPE
+from pptx.oxml.ns import qn
 from lxml import etree
 
 P_NS = 'http://schemas.openxmlformats.org/presentationml/2006/main'
@@ -21,6 +22,9 @@ TEMPLATE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'PPTmue
 
 # Max data rows that fit the template slide; extra rows spill to a new slide.
 MAX_ROWS_PER_SLIDE = 5
+
+# Typeface forced on every run of the generated deck.
+CONTENT_FONT = 'Calibri Light'
 
 # Template geometry (EMU) — measured from PPTmuestra.pptx
 CIRCLE_X = 11337402
@@ -195,6 +199,19 @@ def set_cell_lines(cell, lines, active=None, active_color=None):
         run.font.bold = True if is_active else None
         if is_active and active_color is not None:
             run.font.color.rgb = active_color
+
+
+def apply_font(slide, name=CONTENT_FONT):
+    """Force `name` as the typeface of every run in the slide.
+
+    Walks the slide XML instead of recursing shapes so tables, grouped shapes
+    and placeholders are all covered. Runs without explicit properties get an
+    `a:rPr` first, otherwise they'd keep inheriting the theme font.
+    """
+    for run in slide._element.iter(qn('a:r')):
+        run.get_or_add_rPr()
+    for rpr in slide._element.iter(qn('a:rPr'), qn('a:defRPr'), qn('a:endParaRPr')):
+        rpr.get_or_add_latin().typeface = name
 
 
 # ── Per-slide updaters ───────────────────────────────────────────────────────
@@ -526,6 +543,8 @@ def generate_ppt(template_bytes, datos, metadata, secciones):
         update_stats(slide, meta.get('muestra'), meta.get('desertores'), meta.get('alumnos'))
         update_var_table(slide, meta.get('var_des_prom'), meta.get('var_periodo_ant'))
         update_comments(slide, meta.get('comentarios'))
+
+        apply_font(slide)
 
     buf = io.BytesIO()
     output_prs.save(buf)
