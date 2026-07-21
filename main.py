@@ -243,14 +243,22 @@ def apply_font(slide, name=CONTENT_FONT):
 
 # ── Per-slide updaters ───────────────────────────────────────────────────────
 
+def pct1(value):
+    """Format a 0..1 ratio as '81.2%' (1 decimal). Non-numeric/empty stays as-is."""
+    try:
+        return f"{float(value) * 100:.1f}%"
+    except (TypeError, ValueError):
+        return str(value)
+
+
 def update_header(slide, carrera, segmento, modalidad, des_carrera, des_prom, pg, total):
     for shape in slide.shapes:
         if shape.has_text_frame and shape.top / 360000 < 5:
             if 'Título' in shape.name or 'Titulo' in shape.name:
                 text = (
                     f"{carrera} – {segmento} – {modalidad}"
-                    f"  |  Deserción Carrera: {des_carrera}"
-                    f"   |   Deserción Prom.: {des_prom}\t    \t      ({pg} de {total})"
+                    f"  |  Deserción Carrera: {pct1(des_carrera)}"
+                    f"   |   Deserción Prom.: {pct1(des_prom)}\t    \t      ({pg} de {total})"
                 )
                 tf = shape.text_frame
                 if tf.paragraphs and tf.paragraphs[0].runs:
